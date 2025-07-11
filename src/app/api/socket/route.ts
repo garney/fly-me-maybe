@@ -10,7 +10,7 @@ declare global {
   var io: Server | undefined;
 }
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     if (!global.io) {
       console.log('*First use, starting socket.io');
@@ -32,57 +32,32 @@ export async function GET(req: Request) {
 
         socket.on('playerMove', (data: PlayerMoveData) => {
           // Broadcast the move to all other players
-          socket.broadcast.emit('playerMoved', {
-            playerId: socket.id,
-            ...data,
-          });
+          socket.broadcast.emit('playerMoved', { ...data, id: socket.id });
         });
 
-        socket.on('error', (error) => {
-          console.error('Socket error:', error);
-        });
-
-        socket.on('disconnect', (reason) => {
-          console.log('Client disconnected:', socket.id, 'Reason:', reason);
+        socket.on('disconnect', () => {
+          console.log('Client disconnected:', socket.id);
           // Notify other players about the disconnection
-          socket.broadcast.emit('playerLeft', { playerId: socket.id });
+          socket.broadcast.emit('playerLeft', { id: socket.id });
         });
       });
-
-      global.io.engine.on('connection_error', (err) => {
-        console.error('Connection error:', err);
-      });
     }
 
-    // Get the upgrade header from the request
-    const upgradeHeader = req.headers.get('upgrade') || '';
-
-    if (upgradeHeader.toLowerCase() === 'websocket') {
-      // Return a WebSocket upgrade response
-      return new Response(null, {
-        status: 101,
-        headers: {
-          'Upgrade': 'websocket',
-          'Connection': 'Upgrade',
-        }
-      });
-    }
-
-    // For polling requests, return a standard response with CORS headers
-    return new Response(null, {
+    // Return a simple 200 OK response for polling requests
+    return new Response('ok', {
       status: 200,
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'text/plain',
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Methods': 'GET, POST',
+        'Access-Control-Allow-Headers': 'Content-Type',
         'Cache-Control': 'no-store',
-      }
+      },
     });
+
   } catch (error) {
-    console.error('Server error:', error);
-    return new Response('Internal server error', { status: 500 });
+    console.error('Socket.IO request error:', error);
+    return new Response('Internal Server Error', { status: 500 });
   }
 }
 

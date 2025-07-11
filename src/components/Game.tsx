@@ -29,133 +29,83 @@ export default function Game() {
             this.reconnectAttempts = 0;
           }
 
-          initSocket() {
-            if (this.socket?.connected) return;
-
-            const socket = io({
-              path: '/api/socket',
-              addTrailingSlash: false,
-              autoConnect: true,
-              reconnection: true,
-              reconnectionAttempts: 10,
-              reconnectionDelay: 2000,
-              reconnectionDelayMax: 10000,
-              randomizationFactor: 0.5,
-              timeout: 45000,
-              forceNew: true,
-              withCredentials: false,
-              transports: ['polling', 'websocket'],
-            }) as Socket;
-
-            this.socket = socket;
-
-            socket.on('connect', () => {
-              console.log('Connected to server');
-              this.reconnectAttempts = 0;
-              
-              // Re-add current player position if reconnecting
-              if (this.currentPlayer && this.socket) {
-                this.socket.emit('playerMove', {
-                  x: this.currentPlayer.x,
-                  y: this.currentPlayer.y,
-                });
-              }
-            });
-
-            socket.on('connect_error', (error) => {
-              console.error('Connection error:', error);
-              this.reconnectAttempts++;
-              
-              if (this.reconnectAttempts >= 10) {
-                console.error('Max reconnection attempts reached');
-                socket.disconnect();
-              }
-            });
-
-            socket.on('playerMoved', (data: { playerId: string; x: number; y: number }) => {
-              const otherPlayer = this.players.get(data.playerId);
-              if (otherPlayer) {
-                otherPlayer.setPosition(data.x, data.y);
-              } else {
-                // Create new player if doesn't exist
-                const newPlayer = this.add.rectangle(data.x, data.y, 50, 50, 0xff0000);
-                this.players.set(data.playerId, newPlayer);
-              }
-            });
-
-            socket.on('playerLeft', (data: { playerId: string }) => {
-              const player = this.players.get(data.playerId);
-              if (player) {
-                player.destroy();
-                this.players.delete(data.playerId);
-              }
-            });
-
-            socket.on('disconnect', (reason) => {
-              console.log('Disconnected:', reason);
-              
-              // Clear other players on disconnect
-              this.players.forEach((player) => {
-                if (player !== this.currentPlayer) {
-                  player.destroy();
-                }
-              });
-              this.players.clear();
-              
-              if (this.currentPlayer) {
-                this.players.set('self', this.currentPlayer);
-              }
-
-              if (reason === 'io server disconnect' || reason === 'transport close') {
-                // Server initiated disconnect or transport closed, try to reconnect
-                setTimeout(() => {
-                  if (this.reconnectAttempts < 10) {
-                    console.log('Attempting to reconnect...');
-                    socket.connect();
-                  }
-                }, 2000);
-              }
-            });
-
-            socket.on('error', (error) => {
-              console.error('Socket error:', error);
-            });
-
-            // Handle browser window focus/blur
-            window.addEventListener('focus', () => {
-              if (!socket.connected && this.reconnectAttempts < 10) {
-                console.log('Window focused, attempting to reconnect...');
-                socket.connect();
-              }
-            });
-          }
-
           preload() {
-            this.initSocket();
+            // No assets to preload
           }
 
           create() {
+            this.initSocket();
+            
             // Create current player
             this.currentPlayer = this.add.rectangle(400, 300, 50, 50, 0x00ff00);
-            this.cursors = this.input.keyboard.createCursorKeys();
+            
+            // Initialize cursor keys if input is available
+            if (this.input && this.input.keyboard) {
+              this.cursors = this.input.keyboard.createCursorKeys();
+            }
 
             // Add current player to players map
             if (this.currentPlayer && this.socket) {
-              this.players.set('self', this.currentPlayer);
-              
-              // Emit initial position
-              this.socket.emit('playerMove', {
-                x: this.currentPlayer.x,
-                y: this.currentPlayer.y,
-              });
+              this.players.set(this.socket.id || 'self', this.currentPlayer);
             }
           }
 
-          update() {
-            if (!this.currentPlayer || !this.cursors || !this.socket?.connected) return;
+          private initSocket() {
+            this.socket = io({
+              path: '/api/socket',
+              addTrailingSlash: false,
+              reconnectionAttempts: 5,
+              reconnectionDelay: 1000,
+              timeout: 45000,
+            });
 
-            const speed = 5;
+            if (!this.socket) return;
+
+            this.socket.on('connect', () => {
+              console.log('Connected to server');
+              this.reconnectAttempts = 0;
+            });
+
+            this.socket.on('playerMoved', (data: { id: string; x: number; y: number }) => {
+              let player = this.players.get(data.id);
+              if (!player) {
+                player = this.add.rectangle(data.x, data.y, 50, 50, 0xff0000);
+                this.players.set(data.id, player);
+              }
+              player.setPosition(data.x, data.y);
+            });
+
+            this.socket.on('playerLeft', (data: { id: string }) => {
+              const player = this.players.get(data.id);
+              if (player) {
+                player.destroy();
+                this.players.delete(data.id);
+              }
+            });
+
+            this.socket.on('disconnect', (reason) => {
+              console.log('Disconnected:', reason);
+              if (reason === 'io server disconnect') {
+                // Server initiated disconnect, try to reconnect
+                this.socket?.connect();
+              }
+            });
+
+            this.socket.on('connect_error', (error) => {
+              console.error('Connection error:', error);
+              this.reconnectAttempts++;
+              if (this.reconnectAttempts >= 5) {
+                console.error('Max reconnection attempts reached');
+                this.socket?.disconnect();
+              }
+            });
+          }
+
+          update() {
+            if (!this.currentPlayer || !this.cursors || !this.socket) return;
+
             let moved = false;
+            const speed = 5;
 
             if (this.cursors.left.isDown) {
               this.currentPlayer.x -= speed;
@@ -174,7 +124,7 @@ export default function Game() {
               moved = true;
             }
 
-            if (moved && this.socket) {
+            if (moved) {
               this.socket.emit('playerMove', {
                 x: this.currentPlayer.x,
                 y: this.currentPlayer.y,
@@ -183,23 +133,22 @@ export default function Game() {
           }
         }
 
-        // Initialize Phaser game
-        const config: Phaser.Types.Core.GameConfig = {
-          type: Phaser.AUTO,
-          parent: gameRef.current || undefined,
-          width: 800,
-          height: 600,
-          physics: {
-            default: 'arcade',
-            arcade: {
-              gravity: { x: 0, y: 0 },
-              debug: false,
+        if (!gameInstanceRef.current && gameRef.current) {
+          gameInstanceRef.current = new Phaser.Game({
+            type: Phaser.AUTO,
+            parent: gameRef.current,
+            width: 800,
+            height: 600,
+            scene: MainScene,
+            physics: {
+              default: 'arcade',
+              arcade: {
+                gravity: { x: 0, y: 0 },
+                debug: false,
+              },
             },
-          },
-          scene: MainScene,
-        };
-
-        gameInstanceRef.current = new Phaser.Game(config);
+          });
+        }
       };
 
       initPhaser();
@@ -208,9 +157,10 @@ export default function Game() {
     return () => {
       if (gameInstanceRef.current) {
         gameInstanceRef.current.destroy(true);
+        gameInstanceRef.current = null;
       }
     };
   }, []);
 
-  return <div ref={gameRef} />;
+  return <div ref={gameRef} style={{ width: '800px', height: '600px' }} />;
 } 
