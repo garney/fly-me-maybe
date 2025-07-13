@@ -1,1 +1,0 @@
-{"version":3,"sources":["app.scss"],"names":[],"mappings":"AAEE,aAEE,cAGF,sBAJE,gBASA,eACE,UAAA,CACA","file":"index.css","sourceRoot":"../web-src","sourcesContent":[".app {\n\n  .status {\n    font-weight: bold;\n    color: darkgreen;\n  }\n\n  .id {\n    font-weight: bold;\n  }\n\n  .dice {\n    img {\n      width: 50px;\n      height: 50px;\n    }\n  }\n}"]}
