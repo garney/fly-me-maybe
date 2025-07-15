@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <% include ../partials/header.ejs %>
+  <link rel="stylesheet" href="./index.css">
+  <style>
+    .player-info {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      z-index: 1000;
+    }
+    .player-list {
+      position: fixed;
+      top: 80px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      z-index: 1000;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .player-list h3, .player-info h3 {
+      margin: 0 0 10px;
+      color: #FFD700;
+    }
+    .player-item {
+      margin-bottom: 5px;
+    }
+    .credits {
+      color: #FFD700;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  
+
+  <script>
+    window.config = {
+      socketUrl: '<%=socketUrl%>',
+      playerId: '<%=player.id%>',
+      playerName: '<%=player.name%>'
+    }
+  </script>
+  <div id="root"></div>
+  <script src="./index.js"></script>
+</body>
+</html>
